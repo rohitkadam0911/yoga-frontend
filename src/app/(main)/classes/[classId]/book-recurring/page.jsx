@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export default function BookRecurringPage() {
     const params = useParams();
     const classId = params?.classId;
@@ -25,7 +27,7 @@ export default function BookRecurringPage() {
                 setError("");
 
                 const res = await fetch(
-                    `http://localhost:5000/api/v1/class-sessions/class/${classId}`
+                    `${API_URL}/class-sessions/class/${classId}`
                 );
 
                 const data = await res.json();
@@ -107,7 +109,7 @@ export default function BookRecurringPage() {
 
             for (const sessionId of selectedSessionIds) {
                 const res = await fetch(
-                    "http://localhost:5000/api/v1/bookings/create",
+                    `${API_URL}/bookings/create`,
                     {
                         method: "POST",
                         headers: {

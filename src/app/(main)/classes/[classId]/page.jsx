@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/style.css";
 import {
     getClassByIdApi,
     getClassSessionsByClassApi
@@ -11,6 +13,18 @@ import { createBookingApi } from "@/services/booking.service";
 import { createPaymentApi } from "@/services/payment.service";
 import api from "@/lib/axios";
 import { useAuth } from "@/context/AuthContext";
+
+const dayPickerStyles = `
+  .rdp-available:not([aria-selected="true"])::after {
+    content: "";
+    display: block;
+    width: 4px;
+    height: 4px;
+    border-radius: 9999px;
+    background: #f26457;
+    margin: 2px auto 0;
+  }
+`;
 
 export default function ClassDetailPage() {
     const { classId } = useParams();
@@ -25,6 +39,7 @@ export default function ClassDetailPage() {
     const [bookingSuccess, setBookingSuccess] = useState(false);
     const [sessions, setSessions] = useState([]);
     const [selectedSession, setSelectedSession] = useState(null);
+    const [selectedDate, setSelectedDate] = useState(null);
     const [paymentMethod, setPaymentMethod] = useState("upi");
     const [showPaymentModal, setShowPaymentModal] = useState(false);
 
@@ -60,6 +75,7 @@ export default function ClassDetailPage() {
 
                     if (activeSessions.length > 0) {
                         setSelectedSession(activeSessions[0]);
+                        setSelectedDate(new Date(activeSessions[0].date));
                     }
                 } else {
                     console.error(
@@ -96,6 +112,24 @@ export default function ClassDetailPage() {
             month: "short",
             year: "numeric"
         });
+    };
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const availableDates = sessions.map((s) => new Date(s.date));
+
+    const sessionsForSelectedDate = selectedDate
+        ? sessions.filter(
+              (s) =>
+                  new Date(s.date).toDateString() === selectedDate.toDateString()
+          )
+        : [];
+
+    const handleDateSelect = (date) => {
+        setSelectedDate(date);
+        setSelectedSession(null);
+        setBookingError("");
     };
 
     useEffect(() => {
@@ -431,6 +465,8 @@ export default function ClassDetailPage() {
 
     return (
         <div className="bg-[#f8fbf9] min-h-screen text-[#2c3e38] pb-20">
+            <style>{dayPickerStyles}</style>
+
             <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-4 flex items-center justify-between">
                 <Link
                     href="/classes"
@@ -580,104 +616,99 @@ export default function ClassDetailPage() {
                                         No active upcoming dates available right now.
                                     </p>
                                 ) : (
-                                    <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
-                                        {sessions.map((session) => {
-                                            const isSelected =
-                                                selectedSession?._id ===
-                                                session._id;
+                                    <>
+                                        <div className="flex justify-center bg-[#f8fbf9] rounded-2xl border border-slate-100 p-2">
+                                            <DayPicker
+                                                mode="single"
+                                                selected={selectedDate}
+                                                onSelect={handleDateSelect}
+                                                disabled={{ before: today }}
+                                                defaultMonth={selectedDate || today}
+                                                modifiers={{ available: availableDates }}
+                                                modifiersClassNames={{
+                                                    available: "rdp-available",
+                                                }}
+                                                classNames={{
+                                                    root: "text-sm",
+                                                    month_caption: "text-[#2d5248] font-bold text-sm mb-2",
+                                                    weekday: "text-[#5b8077] text-xs font-semibold",
+                                                    day_button:
+                                                        "w-10 h-9 rounded-xl text-sm text-[#2c3e38]  transition",
+                                                    selected: "!bg-[#2d5248] !text-white font-bold rounded-full",
+                                                    today: "font-bold text-[#f26457]",
+                                                    disabled: "text-slate-300 cursor-not-allowed opacity-40 hover:bg-transparent",
+                                                    outside: "text-slate-200",
+                                                    chevron: "fill-[#2d5248]",
+                                                }}
+                                            />
+                                        </div>
 
-                                            const date = new Date(
-                                                session.date
-                                            );
+                                        {sessionsForSelectedDate.length === 0 ? (
+                                            <p className="text-xs text-[#5b8077] italic p-3 text-center">
+                                                {selectedDate
+                                                    ? "No sessions on this date."
+                                                    : "Pick a highlighted date to see available times."}
+                                            </p>
+                                        ) : (
+                                            <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                                                {sessionsForSelectedDate.map((session) => {
+                                                    const isSelected =
+                                                        selectedSession?._id === session._id;
 
-                                            const dayName =
-                                                date.toLocaleDateString(
-                                                    "en-IN",
-                                                    {
-                                                        weekday: "short"
-                                                    }
-                                                );
+                                                    const timeStr = `${session.startTime} - ${session.endTime}`;
 
-                                            const dateNum =
-                                                date.toLocaleDateString(
-                                                    "en-IN",
-                                                    {
-                                                        month: "short",
-                                                        day: "numeric"
-                                                    }
-                                                );
+                                                    const availableSeats = Math.max(
+                                                        0,
+                                                        (session.capacity || 0) -
+                                                            (session.bookedSeats || 0)
+                                                    );
 
-                                            const timeStr = `${session.startTime} - ${session.endTime}`;
+                                                    const isFull = availableSeats <= 0;
 
-                                            const availableSeats =
-                                                Math.max(
-                                                    0,
-                                                    (session.capacity || 0) -
-                                                    (session.bookedSeats || 0)
-                                                );
-
-                                            const isFull =
-                                                availableSeats <= 0;
-
-                                            return (
-                                                <button
-                                                    key={session._id}
-                                                    type="button"
-                                                    disabled={isFull}
-                                                    onClick={() =>
-                                                        setSelectedSession(
-                                                            session
-                                                        )
-                                                    }
-                                                    className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between ${isSelected
-                                                        ? "border-[#2d5248] bg-[#2d5248] text-white shadow-md"
-                                                        : isFull
-                                                            ? "border-red-100 bg-red-50 text-slate-400 cursor-not-allowed"
-                                                            : "border-slate-200 bg-[#f8fbf9] text-[#2d5248] hover:border-[#2d5248]/50"
-                                                        }`}
-                                                >
-                                                    <span
-                                                        className={`text-[10px] font-bold uppercase ${isSelected
-                                                            ? "text-emerald-200"
-                                                            : isFull
-                                                                ? "text-red-400"
-                                                                : "text-[#5b8077]"
+                                                    return (
+                                                        <button
+                                                            key={session._id}
+                                                            type="button"
+                                                            disabled={isFull}
+                                                            onClick={() => setSelectedSession(session)}
+                                                            className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                                                                isSelected
+                                                                    ? "border-[#2d5248] bg-[#2d5248] text-white shadow-md"
+                                                                    : isFull
+                                                                    ? "border-red-100 bg-red-50 text-slate-400 cursor-not-allowed"
+                                                                    : "border-slate-200 bg-[#f8fbf9] text-[#2d5248] hover:border-[#2d5248]/50"
                                                             }`}
-                                                    >
-                                                        {dayName}
-                                                    </span>
-
-                                                    <span className="text-xs font-bold mt-1">
-                                                        {dateNum}
-                                                    </span>
-
-                                                    <span
-                                                        className={`text-[10px] mt-1 ${isSelected
-                                                            ? "text-emerald-100"
-                                                            : isFull
-                                                                ? "text-red-400"
-                                                                : "text-[#5b8077]"
-                                                            }`}
-                                                    >
-                                                        ⏰ {timeStr}
-                                                    </span>
-
-                                                    <span
-                                                        className={`text-[10px] mt-1 ${isSelected
-                                                            ? "text-emerald-100"
-                                                            : isFull
-                                                                ? "text-red-400"
-                                                                : "text-[#5b8077]"
-                                                            }`}
-                                                    >
-                                                        {isFull
-                                                            ? "Full"
-                                                            : `Seats: ${availableSeats}`}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
+                                                        >
+                                                            <span
+                                                                className={`text-[10px] font-bold ${
+                                                                    isSelected
+                                                                        ? "text-emerald-100"
+                                                                        : isFull
+                                                                        ? "text-red-400"
+                                                                        : "text-[#5b8077]"
+                                                                }`}
+                                                            >
+                                                                ⏰ {timeStr}
+                                                            </span>
+                                                            <span
+                                                                className={`text-[10px] mt-1 ${
+                                                                    isSelected
+                                                                        ? "text-emerald-100"
+                                                                        : isFull
+                                                                        ? "text-red-400"
+                                                                        : "text-[#5b8077]"
+                                                                }`}
+                                                            >
+                                                                {isFull
+                                                                    ? "Full"
+                                                                    : `Seats: ${availableSeats}`}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
 
@@ -800,7 +831,7 @@ export default function ClassDetailPage() {
                             </div>
 
                             {selectedSession && (
-                                <div className="text-[11px] text-[#5b8077]">
+                                <div className="text-[11px]  text-[#5b8077]">
                                     Selected Session:{" "}
                                     <span className="font-bold text-[#2d5248]">
                                         {formatDate(
